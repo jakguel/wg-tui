@@ -13,7 +13,7 @@ use ratatui::{
 use crate::error::Error;
 
 use crate::{
-    types::{Message, NewServerDraft, NewTunnelDraft, Tunnel},
+    types::{EditTunnelDraft, Message, NewServerDraft, NewTunnelDraft, Tunnel},
     ui::{
         bordered_block, label, peer_lines, render_add_menu, render_confirm,
         render_full_tunnel_warning, render_help, render_input, render_peer_config, render_peer_qr,
@@ -1192,6 +1192,130 @@ impl NewServerWizard {
             }
         }
         None
+    }
+
+    fn advance(&mut self) -> bool {
+        if let Some(next) = self.step.next() {
+            self.step = next;
+            false
+        } else {
+            true
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EditWizardStep {
+    Address,
+    Dns,
+    ListenPort,
+    Mtu,
+    PeerEndpoint,
+    PeerAllowedIps,
+    PeerKeepalive,
+}
+
+impl EditWizardStep {
+    fn next(self) -> Option<Self> {
+        match self {
+            Self::Address => Some(Self::Dns),
+            Self::Dns => Some(Self::ListenPort),
+            Self::ListenPort => Some(Self::Mtu),
+            Self::Mtu => Some(Self::PeerEndpoint),
+            Self::PeerEndpoint => Some(Self::PeerAllowedIps),
+            Self::PeerAllowedIps => Some(Self::PeerKeepalive),
+            Self::PeerKeepalive => None,
+        }
+    }
+
+    fn index(self) -> usize {
+        match self {
+            Self::Address => 1,
+            Self::Dns => 2,
+            Self::ListenPort => 3,
+            Self::Mtu => 4,
+            Self::PeerEndpoint => 5,
+            Self::PeerAllowedIps => 6,
+            Self::PeerKeepalive => 7,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct EditTunnelWizard {
+    step: EditWizardStep,
+    draft: EditTunnelDraft,
+    tunnel_name: String,
+    was_active: bool,
+}
+
+impl EditTunnelWizard {
+    fn new(name: String, draft: EditTunnelDraft, was_active: bool) -> Self {
+        Self {
+            step: EditWizardStep::Address,
+            draft,
+            tunnel_name: name,
+            was_active,
+        }
+    }
+
+    fn current_value(&self) -> &str {
+        match self.step {
+            EditWizardStep::Address => &self.draft.address,
+            EditWizardStep::Dns => &self.draft.dns,
+            EditWizardStep::ListenPort => &self.draft.listen_port,
+            EditWizardStep::Mtu => &self.draft.mtu,
+            EditWizardStep::PeerEndpoint => &self.draft.peer_endpoint,
+            EditWizardStep::PeerAllowedIps => &self.draft.peer_allowed_ips,
+            EditWizardStep::PeerKeepalive => &self.draft.peer_persistent_keepalive,
+        }
+    }
+
+    fn current_value_mut(&mut self) -> &mut String {
+        match self.step {
+            EditWizardStep::Address => &mut self.draft.address,
+            EditWizardStep::Dns => &mut self.draft.dns,
+            EditWizardStep::ListenPort => &mut self.draft.listen_port,
+            EditWizardStep::Mtu => &mut self.draft.mtu,
+            EditWizardStep::PeerEndpoint => &mut self.draft.peer_endpoint,
+            EditWizardStep::PeerAllowedIps => &mut self.draft.peer_allowed_ips,
+            EditWizardStep::PeerKeepalive => &mut self.draft.peer_persistent_keepalive,
+        }
+    }
+
+    fn ui(&self) -> (String, &'static str, Option<String>) {
+        let title = format!("Edit Tunnel ({}/7)", self.step.index());
+        let (prompt, hint) = match self.step {
+            EditWizardStep::Address => (
+                "Interface address:",
+                Some("optional, leave empty to keep current".into()),
+            ),
+            EditWizardStep::Dns => (
+                "DNS servers:",
+                Some("optional, leave empty to keep current".into()),
+            ),
+            EditWizardStep::ListenPort => (
+                "Listen port:",
+                Some("optional, leave empty to keep current".into()),
+            ),
+            EditWizardStep::Mtu => (
+                "MTU:",
+                Some("optional, leave empty to keep current".into()),
+            ),
+            EditWizardStep::PeerEndpoint => (
+                "Peer endpoint:",
+                Some("optional, leave empty to keep current".into()),
+            ),
+            EditWizardStep::PeerAllowedIps => (
+                "Peer allowed IPs:",
+                Some("optional, leave empty to keep current".into()),
+            ),
+            EditWizardStep::PeerKeepalive => (
+                "Peer persistent keepalive:",
+                Some("optional, leave empty to keep current".into()),
+            ),
+        };
+        (title, prompt, hint)
     }
 
     fn advance(&mut self) -> bool {
