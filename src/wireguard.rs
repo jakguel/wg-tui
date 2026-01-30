@@ -734,6 +734,116 @@ pub fn parse_tunnel_config(name: &str) -> Result<EditTunnelDraft, Error> {
     })
 }
 
+pub fn update_tunnel_config(name: &str, draft: &EditTunnelDraft) -> Result<(), Error> {
+    let path = Path::new(CONFIG_DIR).join(format!("{name}.conf"));
+    let content = fs::read_to_string(&path)
+        .map_err(|_| Error::WgTui(format!("Could not read config for tunnel '{name}'")))?;
+
+    let mut modified_lines = Vec::new();
+    let mut current_section = "";
+    let mut peer_count = 0;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with(';') {
+            modified_lines.push(line.to_string());
+            continue;
+        }
+
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            if trimmed.eq_ignore_ascii_case("[Peer]") {
+                peer_count += 1;
+            }
+            current_section = trimmed;
+            modified_lines.push(line.to_string());
+            continue;
+        }
+
+        let Some((key_part, _)) = line.split_once('=') else {
+            modified_lines.push(line.to_string());
+            continue;
+        };
+
+        let key = key_part.trim();
+        let new_value = get_draft_value_for_field(draft, current_section, key, peer_count);
+
+        if let Some(new_val) = new_value {
+            if !new_val.is_empty() {
+                let modified = replace_field_value(line, key_part, new_val);
+                modified_lines.push(modified);
+            } else {
+                modified_lines.push(line.to_string());
+            }
+        } else {
+            modified_lines.push(line.to_string());
+        }
+    }
+
+    let mut result = modified_lines.join("\n");
+    if content.ends_with('\n') && !result.ends_with('\n') {
+        result.push('\n');
+    }
+
+    fs::write(&path, result)?;
+    Ok(())
+}
+
+fn get_draft_value_for_field<'a>(
+    draft: &'a EditTunnelDraft,
+    section: &str,
+    key: &str,
+    peer_count: usize,
+) -> Option<&'a str> {
+    if section.eq_ignore_ascii_case("[Interface]") {
+        if key.eq_ignore_ascii_case("Address") {
+            return Some(&draft.address);
+        } else if key.eq_ignore_ascii_case("DNS") {
+            return Some(&draft.dns);
+        } else if key.eq_ignore_ascii_case("ListenPort") {
+            return Some(&draft.listen_port);
+        } else if key.eq_ignore_ascii_case("MTU") {
+            return Some(&draft.mtu);
+        }
+    } else if section.eq_ignore_ascii_case("[Peer]") && peer_count == 1 {
+        if key.eq_ignore_ascii_case("Endpoint") {
+            return Some(&draft.peer_endpoint);
+        } else if key.eq_ignore_ascii_case("AllowedIPs") {
+            return Some(&draft.peer_allowed_ips);
+        } else if key.eq_ignore_ascii_case("PersistentKeepalive") {
+            return Some(&draft.peer_persistent_keepalive);
+        }
+    }
+    None
+}
+
+fn replace_field_value(line: &str, key_part: &str, new_value: &str) -> String {
+    let eq_pos = line.find('=').unwrap();
+    let after_eq = &line[eq_pos + 1..];
+    let (_, inline_comment) = extract_value_and_comment(after_eq);
+
+    if let Some(comment) = inline_comment {
+        format!("{}= {}  {}", key_part, new_value, comment)
+    } else {
+        format!("{}= {}", key_part, new_value)
+    }
+}
+
+fn extract_value_and_comment(after_eq: &str) -> (&str, Option<&str>) {
+    let trimmed = after_eq.trim_start();
+
+    for (i, c) in trimmed.char_indices() {
+        if (c == '#' || c == ';') && i > 0 {
+            let before = &trimmed[..i];
+            if before.ends_with(char::is_whitespace) {
+                return (before.trim(), Some(&trimmed[i..]));
+            }
+        }
+    }
+
+    (trimmed.trim(), None)
+}
+
 pub fn add_server_peer(name: &str) -> Result<PeerConfig, Error> {
     let path = Path::new(CONFIG_DIR).join(format!("{name}.conf"));
     let content = fs::read_to_string(&path)
