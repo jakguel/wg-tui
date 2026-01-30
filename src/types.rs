@@ -48,6 +48,18 @@ pub struct NewServerDraft {
 }
 
 #[derive(Debug, Clone)]
+pub struct EditTunnelDraft {
+    pub name: String,
+    pub address: String,
+    pub dns: String,
+    pub listen_port: String,
+    pub mtu: String,
+    pub peer_endpoint: String,
+    pub peer_allowed_ips: String,
+    pub peer_persistent_keepalive: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct PeerConfig {
     pub client_config_template: String,
     pub suggested_filename: String,
