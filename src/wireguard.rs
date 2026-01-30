@@ -7,11 +7,14 @@ use std::{
     process::{Command, Output},
 };
 
-use zip::{ZipWriter, write::SimpleFileOptions};
+use zip::{write::SimpleFileOptions, ZipWriter};
 
 use crate::{
     error::Error,
-    types::{InterfaceInfo, NewServerDraft, NewTunnelDraft, PeerConfig, PeerInfo, Tunnel},
+    types::{
+        EditTunnelDraft, InterfaceInfo, NewServerDraft, NewTunnelDraft, PeerConfig, PeerInfo,
+        Tunnel,
+    },
 };
 
 const CONFIG_DIR: &str = "/etc/wireguard";
@@ -660,6 +663,75 @@ fn next_peer_ipv4(base: Ipv4Addr, used: &HashSet<Ipv4Addr>) -> Option<Ipv4Addr> 
         }
     }
     None
+}
+
+pub fn parse_tunnel_config(name: &str) -> Result<EditTunnelDraft, Error> {
+    let path = Path::new(CONFIG_DIR).join(format!("{name}.conf"));
+    let content = fs::read_to_string(&path)
+        .map_err(|_| Error::WgTui(format!("Could not read config for tunnel '{name}'")))?;
+
+    let mut address = String::new();
+    let mut dns = String::new();
+    let mut listen_port = String::new();
+    let mut mtu = String::new();
+    let mut peer_endpoint = String::new();
+    let mut peer_allowed_ips = String::new();
+    let mut peer_persistent_keepalive = String::new();
+
+    let mut current_section = "";
+    let mut peer_count = 0;
+
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
+            continue;
+        }
+
+        if line.starts_with('[') && line.ends_with(']') {
+            if line.eq_ignore_ascii_case("[Peer]") {
+                peer_count += 1;
+            }
+            current_section = line;
+            continue;
+        }
+
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let key = key.trim();
+        let value = value.trim();
+
+        if current_section.eq_ignore_ascii_case("[Interface]") {
+            if key.eq_ignore_ascii_case("Address") {
+                address = value.to_string();
+            } else if key.eq_ignore_ascii_case("DNS") {
+                dns = value.to_string();
+            } else if key.eq_ignore_ascii_case("ListenPort") {
+                listen_port = value.to_string();
+            } else if key.eq_ignore_ascii_case("MTU") {
+                mtu = value.to_string();
+            }
+        } else if current_section.eq_ignore_ascii_case("[Peer]") && peer_count == 1 {
+            if key.eq_ignore_ascii_case("Endpoint") {
+                peer_endpoint = value.to_string();
+            } else if key.eq_ignore_ascii_case("AllowedIPs") {
+                peer_allowed_ips = value.to_string();
+            } else if key.eq_ignore_ascii_case("PersistentKeepalive") {
+                peer_persistent_keepalive = value.to_string();
+            }
+        }
+    }
+
+    Ok(EditTunnelDraft {
+        name: name.to_string(),
+        address,
+        dns,
+        listen_port,
+        mtu,
+        peer_endpoint,
+        peer_allowed_ips,
+        peer_persistent_keepalive,
+    })
 }
 
 pub fn add_server_peer(name: &str) -> Result<PeerConfig, Error> {
