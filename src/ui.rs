@@ -391,13 +391,13 @@ pub fn render_edit_form(f: &mut Frame, state: &EditFormState) {
     let help_area = chunks[3];
 
     let field_rows = Layout::vertical([
-        Constraint::Length(3),
-        Constraint::Length(3),
-        Constraint::Length(3),
-        Constraint::Length(3),
-        Constraint::Length(3),
-        Constraint::Length(3),
-        Constraint::Length(3),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
     ])
     .split(fields_area);
 
@@ -409,17 +409,21 @@ pub fn render_edit_form(f: &mut Frame, state: &EditFormState) {
             Paragraph::new(format!("  {}", label)).style(Style::default().fg(Color::Yellow));
         f.render_widget(label_widget, row_chunks[0]);
 
-        let border_style = if i == state.focused_field {
-            Style::default().fg(Color::Cyan)
+        let is_focused = i == state.focused_field;
+        let value = state.inputs[i].value();
+        let display = if is_focused {
+            format!("[{}█]", value)
         } else {
-            Style::default().fg(Color::DarkGray)
+            format!("[{}]", value)
         };
 
-        let input_widget = Paragraph::new(state.inputs[i].value()).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(border_style),
-        );
+        let style = if is_focused {
+            Style::default().fg(Color::Cyan)
+        } else {
+            Style::default().fg(Color::White)
+        };
+
+        let input_widget = Paragraph::new(display).style(style);
         f.render_widget(input_widget, row_chunks[1]);
     }
 
