@@ -7,6 +7,7 @@ A terminal user interface for managing WireGuard VPN tunnels.
 - List and manage WireGuard tunnels
 - Start/stop tunnels with a single keypress
 - View tunnel details (peers, endpoints, transfer statistics)
+- Edit tunnel configurations directly in the TUI
 - Create new client and server tunnels
 - Add peers to server configs and generate client configs
 - Import tunnels from `.conf` files
@@ -47,7 +48,8 @@ wg-tui
 |-----|--------|
 | `j` / `Down` | Move selection down |
 | `k` / `Up` | Move selection up |
-| `Enter` / `Space` | Toggle tunnel (start/stop) |
+| `Enter` | Edit tunnel config |
+| `t` | Toggle tunnel (start/stop) |
 | `d` | Toggle details panel |
 | `a` | Add/import tunnel (menu) |
 | `p` | Add peer to selected server tunnel |
@@ -58,6 +60,19 @@ wg-tui
 | `G` | Jump to last tunnel |
 | `?` | Show help |
 | `q` / `Esc` | Quit |
+
+### Edit Mode Navigation
+
+When editing a tunnel configuration:
+
+| Key | Action |
+|-----|--------|
+| `Tab` / `↓` | Next field |
+| `Shift+Tab` / `↑` | Previous field |
+| `←` / `→` | Move cursor within field |
+| `Enter` | Save changes |
+| `Esc` | Cancel without saving |
+| `t` | Toggle tunnel on/off |
 
 ## License
 
