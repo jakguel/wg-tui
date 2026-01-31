@@ -9,6 +9,7 @@ use ratatui::{
     text::{Line, Text},
     widgets::{List, ListItem, ListState, Paragraph, Wrap},
 };
+use tui_input::Input;
 
 use crate::error::Error;
 
@@ -1408,6 +1409,59 @@ impl EditTunnelWizard {
             false
         } else {
             true
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct EditFormState {
+    inputs: Vec<Input>,
+    focused_field: usize,
+    tunnel_name: String,
+    was_active: bool,
+}
+
+impl EditFormState {
+    fn new(name: String, draft: EditTunnelDraft, was_active: bool) -> Self {
+        let inputs = vec![
+            Input::new(draft.address),
+            Input::new(draft.dns),
+            Input::new(draft.listen_port),
+            Input::new(draft.mtu),
+            Input::new(draft.peer_endpoint),
+            Input::new(draft.peer_allowed_ips),
+            Input::new(draft.peer_persistent_keepalive),
+        ];
+        Self {
+            inputs,
+            focused_field: 0,
+            tunnel_name: name,
+            was_active,
+        }
+    }
+
+    fn next_field(&mut self) {
+        self.focused_field = (self.focused_field + 1) % 7;
+    }
+
+    fn prev_field(&mut self) {
+        self.focused_field = if self.focused_field == 0 {
+            6
+        } else {
+            self.focused_field - 1
+        };
+    }
+
+    fn to_draft(&self) -> EditTunnelDraft {
+        EditTunnelDraft {
+            name: self.tunnel_name.clone(),
+            address: self.inputs[0].value().to_string(),
+            dns: self.inputs[1].value().to_string(),
+            listen_port: self.inputs[2].value().to_string(),
+            mtu: self.inputs[3].value().to_string(),
+            peer_endpoint: self.inputs[4].value().to_string(),
+            peer_allowed_ips: self.inputs[5].value().to_string(),
+            peer_persistent_keepalive: self.inputs[6].value().to_string(),
         }
     }
 }

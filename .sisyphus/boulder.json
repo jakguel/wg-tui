@@ -1,6 +1,6 @@
 {
-  "active_plan": "/home/jiyan/Projects/wg-tui/.sisyphus/plans/tunnel-edit.md",
-  "started_at": "2026-01-30T22:29:50.908Z",
-  "session_ids": ["ses_3ef232112ffePzPtc63ekAFa1C"],
-  "plan_name": "tunnel-edit"
+  "active_plan": "/home/jiyan/Projects/wg-tui/.sisyphus/plans/edit-form-ui.md",
+  "started_at": "2026-01-31T01:35:00.000Z",
+  "session_ids": ["ses_3ef232112ffePzPtc63ekAFa1C", "ses_3ee96522affeku7tVVGKh3I4vx"],
+  "plan_name": "edit-form-ui"
 }
