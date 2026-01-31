@@ -860,6 +860,8 @@ impl App {
                 " nav  ".into(),
                 "Enter".fg(Color::Yellow),
                 " toggle  ".into(),
+                "E".fg(Color::Yellow),
+                " edit  ".into(),
                 "d".fg(Color::Yellow),
                 " details  ".into(),
                 "?".fg(Color::Yellow),
