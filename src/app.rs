@@ -23,7 +23,7 @@ use crate::{
         add_server_peer, create_server_tunnel, create_tunnel, default_egress_interface,
         delete_tunnel, detect_public_ip, discover_tunnels, expand_path, export_tunnels_to_zip,
         generate_private_key, get_interface_info, import_tunnel, is_full_tunnel_config,
-        is_interface_active, suggest_server_address, update_tunnel_config, wg_quick,
+        is_interface_active, parse_tunnel_config, suggest_server_address, update_tunnel_config, wg_quick,
     },
 };
 
@@ -656,6 +656,23 @@ impl App {
                     Err(e) => self.message = Some(Message::Error(e.to_string())),
                 }
             }
+            (KeyCode::Char('E'), _) => {
+                let Some(tunnel) = self.selected() else {
+                    return;
+                };
+                let was_active = tunnel.is_active;
+                match parse_tunnel_config(&tunnel.name) {
+                    Ok(draft) => {
+                        let wizard = EditTunnelWizard::new(
+                            tunnel.name.clone(),
+                            draft,
+                            was_active
+                        );
+                        self.edit_tunnel = Some(wizard);
+                    }
+                    Err(e) => self.message = Some(Message::Error(e.to_string())),
+                }
+            }
             (KeyCode::Char('e'), _) => {
                 if self.tunnels.is_empty() {
                     self.message = Some(Message::Error("No tunnels to export".into()));
@@ -735,6 +752,16 @@ impl App {
                 "Export All Tunnels",
                 "Destination (.zip):",
                 path,
+                hint.as_deref(),
+            );
+        }
+        if let Some(ref wizard) = self.edit_tunnel {
+            let (title, prompt, hint) = wizard.ui();
+            render_input(
+                frame,
+                &title,
+                prompt,
+                wizard.current_value(),
                 hint.as_deref(),
             );
         }

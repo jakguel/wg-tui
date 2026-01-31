@@ -1,11 +1,11 @@
-use humansize::{BINARY, format_size};
-use qrcode::{QrCode, render::unicode};
+use humansize::{format_size, BINARY};
+use qrcode::{render::unicode, QrCode};
 use ratatui::{
-    Frame,
     layout::{Alignment, Constraint, Layout, Rect},
     style::{Color, Style, Stylize},
     text::{Line, Text},
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    Frame,
 };
 
 use crate::types::PeerInfo;
@@ -297,6 +297,7 @@ pub fn render_help(f: &mut Frame) {
         ("e", "Export all tunnels to zip"),
         ("x", "Delete tunnel"),
         ("p", "Add peer (server only)"),
+        ("E", "Edit tunnel config"),
         ("r", "Refresh"),
         ("?", "Help"),
         ("q", "Quit"),
