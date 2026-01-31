@@ -1,3 +1,5 @@
+use crate::app::EditFormState;
+use crate::types::PeerInfo;
 use humansize::{format_size, BINARY};
 use qrcode::{render::unicode, QrCode};
 use ratatui::{
@@ -7,8 +9,6 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
     Frame,
 };
-
-use crate::types::PeerInfo;
 
 pub fn bordered_block(title: Option<&str>) -> Block<'_> {
     let block = Block::default()
@@ -355,4 +355,83 @@ pub fn truncate_key(key: &str) -> String {
 
 pub fn format_bytes(b: u64) -> String {
     format_size(b, BINARY)
+}
+
+pub fn render_edit_form(f: &mut Frame, state: &EditFormState) {
+    let area = centered_rect(80, 70, f.area());
+    f.render_widget(Clear, area);
+
+    let labels = [
+        "Address:",
+        "DNS:",
+        "ListenPort:",
+        "MTU:",
+        "Endpoint:",
+        "AllowedIPs:",
+        "Keepalive:",
+    ];
+
+    let block = Block::default()
+        .title(format!(" Edit: {} ", state.tunnel_name))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    let chunks = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(0),
+        Constraint::Length(1),
+        Constraint::Length(1),
+    ])
+    .split(inner);
+
+    let fields_area = chunks[1];
+    let help_area = chunks[3];
+
+    let field_rows = Layout::vertical([
+        Constraint::Length(3),
+        Constraint::Length(3),
+        Constraint::Length(3),
+        Constraint::Length(3),
+        Constraint::Length(3),
+        Constraint::Length(3),
+        Constraint::Length(3),
+    ])
+    .split(fields_area);
+
+    for (i, (label, row_area)) in labels.iter().zip(field_rows.iter()).enumerate() {
+        let row_chunks =
+            Layout::horizontal([Constraint::Length(14), Constraint::Min(0)]).split(*row_area);
+
+        let label_widget =
+            Paragraph::new(format!("  {}", label)).style(Style::default().fg(Color::Yellow));
+        f.render_widget(label_widget, row_chunks[0]);
+
+        let border_style = if i == state.focused_field {
+            Style::default().fg(Color::Cyan)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+
+        let input_widget = Paragraph::new(state.inputs[i].value()).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(border_style),
+        );
+        f.render_widget(input_widget, row_chunks[1]);
+    }
+
+    let help = Line::from(vec![
+        "[Tab/↑↓]".fg(Color::Yellow),
+        " navigate  ".into(),
+        "[Enter]".fg(Color::Green),
+        " save  ".into(),
+        "[Esc]".fg(Color::Yellow),
+        " cancel  ".into(),
+        "[t]".fg(Color::Yellow),
+        " toggle".into(),
+    ]);
+    f.render_widget(Paragraph::new(help).alignment(Alignment::Center), help_area);
 }

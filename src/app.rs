@@ -1414,11 +1414,11 @@ impl EditTunnelWizard {
 }
 
 #[derive(Debug, Clone)]
-struct EditFormState {
-    inputs: Vec<Input>,
-    focused_field: usize,
-    tunnel_name: String,
-    was_active: bool,
+pub struct EditFormState {
+    pub inputs: Vec<Input>,
+    pub focused_field: usize,
+    pub tunnel_name: String,
+    pub was_active: bool,
 }
 
 impl EditFormState {
