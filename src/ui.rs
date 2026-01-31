@@ -412,7 +412,9 @@ pub fn render_edit_form(f: &mut Frame, state: &EditFormState) {
         let is_focused = i == state.focused_field;
         let value = state.inputs[i].value();
         let display = if is_focused {
-            format!("[{}█]", value)
+            let cursor_pos = state.inputs[i].visual_cursor();
+            let (before, after) = value.split_at(cursor_pos);
+            format!("[{}█{}]", before, after)
         } else {
             format!("[{}]", value)
         };
