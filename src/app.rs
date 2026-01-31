@@ -537,6 +537,11 @@ impl App {
             KeyCode::Backspace => {
                 wizard.current_value_mut().pop();
             }
+            KeyCode::Char('t') => {
+                let tunnel_name = wizard.tunnel_name.clone();
+                let _ = wizard;
+                self.toggle_selected_with_name(&tunnel_name);
+            }
             KeyCode::Char(c) => {
                 wizard.current_value_mut().push(c);
             }
