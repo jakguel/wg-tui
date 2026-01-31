@@ -23,7 +23,7 @@ use crate::{
         add_server_peer, create_server_tunnel, create_tunnel, default_egress_interface,
         delete_tunnel, detect_public_ip, discover_tunnels, expand_path, export_tunnels_to_zip,
         generate_private_key, get_interface_info, import_tunnel, is_full_tunnel_config,
-        is_interface_active, suggest_server_address, wg_quick,
+        is_interface_active, suggest_server_address, update_tunnel_config, wg_quick,
     },
 };
 
@@ -38,6 +38,7 @@ pub struct App {
     input_path: Option<String>,
     export_path: Option<String>,
     new_tunnel: Option<NewTunnelWizard>,
+    edit_tunnel: Option<EditTunnelWizard>,
     pending_peer: Option<PendingPeerConfig>,
     peer_endpoint_input: Option<String>,
     peer_dns_input: Option<String>,
@@ -66,6 +67,7 @@ impl App {
             input_path: None,
             export_path: None,
             new_tunnel: None,
+            edit_tunnel: None,
             pending_peer: None,
             peer_endpoint_input: None,
             peer_dns_input: None,
@@ -207,6 +209,9 @@ impl App {
             return Ok(());
         }
         if self.consume_peer_config(key) {
+            return Ok(());
+        }
+        if self.consume_edit_tunnel(key) {
             return Ok(());
         }
         if self.consume_add_menu(key) {
@@ -484,6 +489,50 @@ impl App {
             KeyCode::Esc => {
                 self.new_tunnel = None;
                 self.message = Some(Message::Info("Create cancelled".into()));
+            }
+            KeyCode::Backspace => {
+                wizard.current_value_mut().pop();
+            }
+            KeyCode::Char(c) => {
+                wizard.current_value_mut().push(c);
+            }
+            _ => {}
+        }
+        true
+    }
+
+    fn consume_edit_tunnel(&mut self, key: crossterm::event::KeyEvent) -> bool {
+        let Some(ref mut wizard) = self.edit_tunnel else {
+            return false;
+        };
+        match key.code {
+            KeyCode::Enter => {
+                let finished = wizard.advance();
+                if finished {
+                    let wizard = self.edit_tunnel.take().unwrap();
+                    match update_tunnel_config(&wizard.tunnel_name, &wizard.draft) {
+                        Ok(()) => {
+                            if wizard.was_active {
+                                let name = wizard.tunnel_name.clone();
+                                if let Err(e) = wg_quick("down", &name) {
+                                    self.message = Some(Message::Error(e.to_string()));
+                                    return true;
+                                }
+                                if let Err(e) = wg_quick("up", &name) {
+                                    self.message = Some(Message::Error(e.to_string()));
+                                    return true;
+                                }
+                            }
+                            self.message = Some(Message::Success("Tunnel config updated".into()));
+                            self.refresh_tunnels();
+                        }
+                        Err(e) => self.message = Some(Message::Error(e.to_string())),
+                    }
+                }
+            }
+            KeyCode::Esc => {
+                self.edit_tunnel = None;
+                self.message = Some(Message::Info("Edit cancelled".into()));
             }
             KeyCode::Backspace => {
                 wizard.current_value_mut().pop();
