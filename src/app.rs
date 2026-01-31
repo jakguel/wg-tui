@@ -9,14 +9,14 @@ use ratatui::{
     text::{Line, Text},
     widgets::{List, ListItem, ListState, Paragraph, Wrap},
 };
-use tui_input::Input;
+use tui_input::{Input, InputRequest};
 
 use crate::error::Error;
 
 use crate::{
     types::{EditTunnelDraft, Message, NewServerDraft, NewTunnelDraft, Tunnel},
     ui::{
-        bordered_block, label, peer_lines, render_add_menu, render_confirm,
+        bordered_block, label, peer_lines, render_add_menu, render_confirm, render_edit_form,
         render_full_tunnel_warning, render_help, render_input, render_peer_config, render_peer_qr,
         section, truncate_key,
     },
@@ -39,7 +39,7 @@ pub struct App {
     input_path: Option<String>,
     export_path: Option<String>,
     new_tunnel: Option<NewTunnelWizard>,
-    edit_tunnel: Option<EditTunnelWizard>,
+    edit_form: Option<EditFormState>,
     pending_peer: Option<PendingPeerConfig>,
     peer_endpoint_input: Option<String>,
     peer_dns_input: Option<String>,
@@ -68,7 +68,7 @@ impl App {
             input_path: None,
             export_path: None,
             new_tunnel: None,
-            edit_tunnel: None,
+            edit_form: None,
             pending_peer: None,
             peer_endpoint_input: None,
             peer_dns_input: None,
@@ -212,7 +212,7 @@ impl App {
         if self.consume_peer_config(key) {
             return Ok(());
         }
-        if self.consume_edit_tunnel(key) {
+        if self.consume_edit_form(key) {
             return Ok(());
         }
         if self.consume_add_menu(key) {
@@ -502,51 +502,88 @@ impl App {
         true
     }
 
-    fn consume_edit_tunnel(&mut self, key: crossterm::event::KeyEvent) -> bool {
-        let Some(ref mut wizard) = self.edit_tunnel else {
+    fn consume_edit_form(&mut self, key: crossterm::event::KeyEvent) -> bool {
+        let Some(ref mut form) = self.edit_form else {
             return false;
         };
         match key.code {
+            KeyCode::Tab => {
+                form.next_field();
+            }
+            KeyCode::BackTab => {
+                form.prev_field();
+            }
+            KeyCode::Up => {
+                form.prev_field();
+            }
+            KeyCode::Down => {
+                form.next_field();
+            }
             KeyCode::Enter => {
-                let finished = wizard.advance();
-                if finished {
-                    let wizard = self.edit_tunnel.take().unwrap();
-                    match update_tunnel_config(&wizard.tunnel_name, &wizard.draft) {
-                        Ok(()) => {
-                            if wizard.was_active {
-                                let name = wizard.tunnel_name.clone();
-                                if let Err(e) = wg_quick("down", &name) {
-                                    self.message = Some(Message::Error(e.to_string()));
-                                    return true;
-                                }
-                                if let Err(e) = wg_quick("up", &name) {
-                                    self.message = Some(Message::Error(e.to_string()));
-                                    return true;
-                                }
+                let form = self.edit_form.take().unwrap();
+                match update_tunnel_config(&form.tunnel_name, &form.to_draft()) {
+                    Ok(()) => {
+                        if form.was_active {
+                            let name = form.tunnel_name.clone();
+                            if let Err(e) = wg_quick("down", &name) {
+                                self.message = Some(Message::Error(e.to_string()));
+                                return true;
                             }
-                            self.message = Some(Message::Success("Tunnel config updated".into()));
-                            self.refresh_tunnels();
+                            if let Err(e) = wg_quick("up", &name) {
+                                self.message = Some(Message::Error(e.to_string()));
+                                return true;
+                            }
                         }
-                        Err(e) => self.message = Some(Message::Error(e.to_string())),
+                        self.message = Some(Message::Success("Config updated".into()));
+                        self.refresh_tunnels();
                     }
+                    Err(e) => self.message = Some(Message::Error(e.to_string())),
                 }
             }
             KeyCode::Esc => {
-                self.edit_tunnel = None;
+                self.edit_form = None;
                 self.message = Some(Message::Info("Edit cancelled".into()));
             }
-            KeyCode::Backspace => {
-                wizard.current_value_mut().pop();
-            }
             KeyCode::Char('t') => {
-                let tunnel_name = wizard.tunnel_name.clone();
-                let _ = wizard;
+                let tunnel_name = form.tunnel_name.clone();
+                let _ = form;
                 self.toggle_selected_with_name(&tunnel_name);
             }
-            KeyCode::Char(c) => {
-                wizard.current_value_mut().push(c);
+            _ => {
+                let request = match (key.code, key.modifiers) {
+                    (KeyCode::Backspace, KeyModifiers::NONE) | (KeyCode::Char('h'), KeyModifiers::CONTROL) => {
+                        Some(InputRequest::DeletePrevChar)
+                    }
+                    (KeyCode::Delete, KeyModifiers::NONE) => Some(InputRequest::DeleteNextChar),
+                    (KeyCode::Left, KeyModifiers::NONE) | (KeyCode::Char('b'), KeyModifiers::CONTROL) => {
+                        Some(InputRequest::GoToPrevChar)
+                    }
+                    (KeyCode::Left, KeyModifiers::CONTROL) => Some(InputRequest::GoToPrevWord),
+                    (KeyCode::Right, KeyModifiers::NONE) | (KeyCode::Char('f'), KeyModifiers::CONTROL) => {
+                        Some(InputRequest::GoToNextChar)
+                    }
+                    (KeyCode::Right, KeyModifiers::CONTROL) => Some(InputRequest::GoToNextWord),
+                    (KeyCode::Char('u'), KeyModifiers::CONTROL) => Some(InputRequest::DeleteLine),
+                    (KeyCode::Char('w'), KeyModifiers::CONTROL) | (KeyCode::Backspace, KeyModifiers::ALT) => {
+                        Some(InputRequest::DeletePrevWord)
+                    }
+                    (KeyCode::Delete, KeyModifiers::CONTROL) => Some(InputRequest::DeleteNextWord),
+                    (KeyCode::Char('k'), KeyModifiers::CONTROL) => Some(InputRequest::DeleteTillEnd),
+                    (KeyCode::Char('a'), KeyModifiers::CONTROL) | (KeyCode::Home, KeyModifiers::NONE) => {
+                        Some(InputRequest::GoToStart)
+                    }
+                    (KeyCode::Char('e'), KeyModifiers::CONTROL) | (KeyCode::End, KeyModifiers::NONE) => {
+                        Some(InputRequest::GoToEnd)
+                    }
+                    (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT) => {
+                        Some(InputRequest::InsertChar(c))
+                    }
+                    _ => None,
+                };
+                if let Some(req) = request {
+                    form.inputs[form.focused_field].handle(req);
+                }
             }
-            _ => {}
         }
         true
     }
@@ -640,12 +677,8 @@ impl App {
                 let was_active = tunnel.is_active;
                 match parse_tunnel_config(&tunnel.name) {
                     Ok(draft) => {
-                        let wizard = EditTunnelWizard::new(
-                            tunnel.name.clone(),
-                            draft,
-                            was_active
-                        );
-                        self.edit_tunnel = Some(wizard);
+                        let form = EditFormState::new(tunnel.name.clone(), draft, was_active);
+                        self.edit_form = Some(form);
                     }
                     Err(e) => self.message = Some(Message::Error(e.to_string())),
                 }
@@ -762,15 +795,8 @@ impl App {
                 hint.as_deref(),
             );
         }
-        if let Some(ref wizard) = self.edit_tunnel {
-            let (title, prompt, hint) = wizard.ui();
-            render_input(
-                frame,
-                &title,
-                prompt,
-                wizard.current_value(),
-                hint.as_deref(),
-            );
+        if let Some(ref form) = self.edit_form {
+            render_edit_form(frame, form);
         }
         if let Some(ref wizard) = self.new_tunnel {
             let (title, prompt, hint) = wizard.ui();
@@ -1277,130 +1303,6 @@ impl NewServerWizard {
             }
         }
         None
-    }
-
-    fn advance(&mut self) -> bool {
-        if let Some(next) = self.step.next() {
-            self.step = next;
-            false
-        } else {
-            true
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum EditWizardStep {
-    Address,
-    Dns,
-    ListenPort,
-    Mtu,
-    PeerEndpoint,
-    PeerAllowedIps,
-    PeerKeepalive,
-}
-
-impl EditWizardStep {
-    fn next(self) -> Option<Self> {
-        match self {
-            Self::Address => Some(Self::Dns),
-            Self::Dns => Some(Self::ListenPort),
-            Self::ListenPort => Some(Self::Mtu),
-            Self::Mtu => Some(Self::PeerEndpoint),
-            Self::PeerEndpoint => Some(Self::PeerAllowedIps),
-            Self::PeerAllowedIps => Some(Self::PeerKeepalive),
-            Self::PeerKeepalive => None,
-        }
-    }
-
-    fn index(self) -> usize {
-        match self {
-            Self::Address => 1,
-            Self::Dns => 2,
-            Self::ListenPort => 3,
-            Self::Mtu => 4,
-            Self::PeerEndpoint => 5,
-            Self::PeerAllowedIps => 6,
-            Self::PeerKeepalive => 7,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct EditTunnelWizard {
-    step: EditWizardStep,
-    draft: EditTunnelDraft,
-    tunnel_name: String,
-    was_active: bool,
-}
-
-impl EditTunnelWizard {
-    fn new(name: String, draft: EditTunnelDraft, was_active: bool) -> Self {
-        Self {
-            step: EditWizardStep::Address,
-            draft,
-            tunnel_name: name,
-            was_active,
-        }
-    }
-
-    fn current_value(&self) -> &str {
-        match self.step {
-            EditWizardStep::Address => &self.draft.address,
-            EditWizardStep::Dns => &self.draft.dns,
-            EditWizardStep::ListenPort => &self.draft.listen_port,
-            EditWizardStep::Mtu => &self.draft.mtu,
-            EditWizardStep::PeerEndpoint => &self.draft.peer_endpoint,
-            EditWizardStep::PeerAllowedIps => &self.draft.peer_allowed_ips,
-            EditWizardStep::PeerKeepalive => &self.draft.peer_persistent_keepalive,
-        }
-    }
-
-    fn current_value_mut(&mut self) -> &mut String {
-        match self.step {
-            EditWizardStep::Address => &mut self.draft.address,
-            EditWizardStep::Dns => &mut self.draft.dns,
-            EditWizardStep::ListenPort => &mut self.draft.listen_port,
-            EditWizardStep::Mtu => &mut self.draft.mtu,
-            EditWizardStep::PeerEndpoint => &mut self.draft.peer_endpoint,
-            EditWizardStep::PeerAllowedIps => &mut self.draft.peer_allowed_ips,
-            EditWizardStep::PeerKeepalive => &mut self.draft.peer_persistent_keepalive,
-        }
-    }
-
-    fn ui(&self) -> (String, &'static str, Option<String>) {
-        let title = format!("Edit Tunnel ({}/7)", self.step.index());
-        let (prompt, hint) = match self.step {
-            EditWizardStep::Address => (
-                "Interface address:",
-                Some("optional, leave empty to keep current".into()),
-            ),
-            EditWizardStep::Dns => (
-                "DNS servers:",
-                Some("optional, leave empty to keep current".into()),
-            ),
-            EditWizardStep::ListenPort => (
-                "Listen port:",
-                Some("optional, leave empty to keep current".into()),
-            ),
-            EditWizardStep::Mtu => (
-                "MTU:",
-                Some("optional, leave empty to keep current".into()),
-            ),
-            EditWizardStep::PeerEndpoint => (
-                "Peer endpoint:",
-                Some("optional, leave empty to keep current".into()),
-            ),
-            EditWizardStep::PeerAllowedIps => (
-                "Peer allowed IPs:",
-                Some("optional, leave empty to keep current".into()),
-            ),
-            EditWizardStep::PeerKeepalive => (
-                "Peer persistent keepalive:",
-                Some("optional, leave empty to keep current".into()),
-            ),
-        };
-        (title, prompt, hint)
     }
 
     fn advance(&mut self) -> bool {
