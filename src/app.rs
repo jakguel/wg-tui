@@ -627,7 +627,24 @@ impl App {
             (KeyCode::Char('G'), _) => self
                 .list_state
                 .select(Some(self.tunnels.len().saturating_sub(1))),
-            (KeyCode::Enter | KeyCode::Char(' '), _) => self.toggle_selected(),
+            (KeyCode::Enter, _) => {
+                let Some(tunnel) = self.selected() else {
+                    return;
+                };
+                let was_active = tunnel.is_active;
+                match parse_tunnel_config(&tunnel.name) {
+                    Ok(draft) => {
+                        let wizard = EditTunnelWizard::new(
+                            tunnel.name.clone(),
+                            draft,
+                            was_active
+                        );
+                        self.edit_tunnel = Some(wizard);
+                    }
+                    Err(e) => self.message = Some(Message::Error(e.to_string())),
+                }
+            }
+            (KeyCode::Char(' '), _) => self.toggle_selected(),
             (KeyCode::Char('d'), _) => self.show_details = !self.show_details,
             (KeyCode::Char('x'), _) => {
                 if self.selected().is_some() {
@@ -656,23 +673,7 @@ impl App {
                     Err(e) => self.message = Some(Message::Error(e.to_string())),
                 }
             }
-            (KeyCode::Char('E'), _) => {
-                let Some(tunnel) = self.selected() else {
-                    return;
-                };
-                let was_active = tunnel.is_active;
-                match parse_tunnel_config(&tunnel.name) {
-                    Ok(draft) => {
-                        let wizard = EditTunnelWizard::new(
-                            tunnel.name.clone(),
-                            draft,
-                            was_active
-                        );
-                        self.edit_tunnel = Some(wizard);
-                    }
-                    Err(e) => self.message = Some(Message::Error(e.to_string())),
-                }
-            }
+            (KeyCode::Char('t'), _) => self.toggle_selected(),
             (KeyCode::Char('e'), _) => {
                 if self.tunnels.is_empty() {
                     self.message = Some(Message::Error("No tunnels to export".into()));
@@ -859,9 +860,9 @@ impl App {
                 " j/k".fg(Color::Yellow),
                 " nav  ".into(),
                 "Enter".fg(Color::Yellow),
-                " toggle  ".into(),
-                "E".fg(Color::Yellow),
                 " edit  ".into(),
+                "t".fg(Color::Yellow),
+                " toggle  ".into(),
                 "d".fg(Color::Yellow),
                 " details  ".into(),
                 "?".fg(Color::Yellow),
